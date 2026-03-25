@@ -5,20 +5,30 @@ from telegram import Bot
 import schedule
 import time
 import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- TRUQUE PARA O RENDER NÃO DESLIGAR O ROBÔ ---
+# --- TRUQUE DEFINITIVO PARA O RENDER ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        self.wfile.write(b"Robo Ativo!")
+
+    def log_message(self, format, *args):
+        return # Silencia os logs de acesso para não sujar seu terminal
+
 def run_dummy_server():
-    port = int(os.environ.get("PORT", 8080))
-    # Cria um servidor simples que apenas diz "OK"
-    server = HTTPServer(('0.0.0.0', port), BaseHTTPRequestHandler)
-    print(f"✅ Servidor fantasma rodando na porta {port}")
+    # O Render injeta a porta na variável de ambiente PORT
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    print(f"✅ Porta {port} aberta. Render feliz!")
     server.serve_forever()
 
-# Inicia o servidor em uma "linha" separada (thread) para não parar o robô
+# Inicia o servidor fantasma antes de começar o robô
 threading.Thread(target=run_dummy_server, daemon=True).start()
-# -----------------------------------------------
+# ---------------------------------------
 
 # 1. --- CONFIGURAÇÕES ---
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
