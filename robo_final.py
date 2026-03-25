@@ -6,6 +6,10 @@ import schedule
 import time
 import os
 import threading
+import sys
+# Força o Python a imprimir no log IMEDIATAMENTE
+sys.stdout.reconfigure(line_buffering=True)
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ==========================================
