@@ -61,12 +61,17 @@ async def garimpar_ofertas():
 
         # LIMITAMOS AQUI: Pegamos apenas os 3 primeiros da lista para não virar spam
         contagem = 0
-        for produto in produtos:
-            if contagem >= 3: break # Para depois de 3 ofertas enviadas
+       for produto in produtos:
+            if contagem >= 3: break 
 
             nome_elem = produto.find('p') or produto.find('h2')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
             link_elem = produto.find('a', href=True)
+            
+            # --- NOVO: BUSCA A IMAGEM DO PRODUTO ---
+            img_elem = produto.find('img')
+            # O ML às vezes esconde o link real em 'data-src' para carregar mais rápido
+            img_url = img_elem.get('data-src') or img_elem.get('src') if img_elem else None
 
             if nome_elem and preco_elem and link_elem:
                 nome = nome_elem.text.strip()
@@ -84,17 +89,22 @@ async def garimpar_ofertas():
                         f"🔗 [CLIQUE AQUI PARA VER]({link})"
                     )
                     
-                    print(f"📤 Postando: {nome[:30]}...")
-                    await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
+                    print(f"📤 Postando com foto: {nome[:30]}...")
+                    
+                    # --- MUDANÇA AQUI: ENVIA FOTO COM LEGENDA ---
+                    try:
+                        if img_url:
+                            await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown')
+                        else:
+                            # Se não achar a foto, manda só o texto para não perder a oferta
+                            await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
+                    except Exception as e:
+                        print(f"⚠️ Erro ao enviar foto, tentando apenas texto: {e}")
+                        await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                     
                     ofertas_postadas.add(oferta_id)
                     contagem += 1
-                    await asyncio.sleep(10) # Pausa de 10 segundos entre mensagens
-                else:
-                    print(f"😴 {nome[:30]}... já está na memória.")
-
-    except Exception as e:
-        print(f"💥 ERRO: {e}")
+                    await asyncio.sleep(10)
 
 # --- AGORA SEGUE O RESTO DO SCRIPT ---
 
