@@ -85,7 +85,7 @@ def tarefa():
 # Verifica novas ofertas a cada 1 hora (para não virar spam)
 schedule.every(1).hours.do(tarefa)
 
-print("🚀 ROBÔ GARIMPEIRO ATIVADO! Buscando as 5 melhores ofertas...")
+print("🚀 ROBÔ está Acordado e Funcionando! Buscando as 5 melhores ofertas...")
 tarefa()
 
 while True:
