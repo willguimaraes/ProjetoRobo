@@ -50,24 +50,21 @@ async def garimpar_ofertas():
     print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando garimpo...")
     
     try:
-        # 1. Tenta acessar o site
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=10)
-        if resposta.status_code != 200:
-            print(f"❌ Erro HTTP: {resposta.status_code}")
-            return
-
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 2. Múltiplos seletores para o Mercado Livre
+        # Seletores
         produtos = site.find_all('li', class_='promotion-item') or \
-                   site.find_all('div', class_='poly-card') or \
-                   site.find_all('div', class_='promotion-item__container')
+                   site.find_all('div', class_='poly-card')
 
-        print(f"🔎 Encontrei {len(produtos)} produtos na página.")
+        print(f"🔎 Encontrei {len(produtos)} produtos. Filtrando novidades...")
 
+        # LIMITAMOS AQUI: Pegamos apenas os 3 primeiros da lista para não virar spam
+        contagem = 0
         for produto in produtos:
-            # Busca título, preço e link de forma flexível
-            nome_elem = produto.find('p') or produto.find('h2') or produto.find('a', class_='poly-component__title')
+            if contagem >= 3: break # Para depois de 3 ofertas enviadas
+
+            nome_elem = produto.find('p') or produto.find('h2')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
             link_elem = produto.find('a', href=True)
 
@@ -75,9 +72,7 @@ async def garimpar_ofertas():
                 nome = nome_elem.text.strip()
                 preco = preco_elem.text.strip()
                 link = link_elem['href']
-                
-                if link.startswith('/'):
-                    link = "https://www.mercadolivre.com.br" + link
+                if link.startswith('/'): link = "https://www.mercadolivre.com.br" + link
                 
                 oferta_id = f"{nome}-{preco}"
                 
@@ -91,12 +86,15 @@ async def garimpar_ofertas():
                     
                     print(f"📤 Postando: {nome[:30]}...")
                     await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
+                    
                     ofertas_postadas.add(oferta_id)
-                    time.sleep(2)
+                    contagem += 1
+                    await asyncio.sleep(10) # Pausa de 10 segundos entre mensagens
+                else:
+                    print(f"😴 {nome[:30]}... já está na memória.")
 
     except Exception as e:
-        # ESTA É A PARTE QUE ESTAVA FALTANDO E CAUSOU O ERRO:
-        print(f"💥 ERRO CRÍTICO NO GARIMPO: {e}")
+        print(f"💥 ERRO: {e}")
 
 # --- AGORA SEGUE O RESTO DO SCRIPT ---
 
