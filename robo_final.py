@@ -50,52 +50,63 @@ async def garimpar_ofertas():
     print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando garimpo...")
     
     try:
-        # 1. TENTA ACESSAR O SITE
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=10)
-        print(f"📡 Status da Resposta: {resposta.status_code}")
-
         if resposta.status_code != 200:
-            print("❌ O Mercado Livre bloqueou o acesso do servidor.")
+            print(f"❌ Erro HTTP: {resposta.status_code}")
             return
 
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # 2. TENTA ENCONTRAR OS PRODUTOS (SELETORES ATUALIZADOS)
-        # O ML muda essas classes direto. Vamos tentar as duas mais comuns:
+        # --- NOVO SELETOR (Tenta 3 padrões diferentes do Mercado Livre) ---
+        # 1. Tenta o padrão de lista de ofertas do dia
         produtos = site.find_all('li', class_='promotion-item')
+        
+        # 2. Se não achou, tenta o padrão de cards novos (Poly-card)
+        if not produtos:
+            produtos = site.find_all('div', class_='poly-card')
+            
+        # 3. Se ainda não achou, tenta o container genérico
         if not produtos:
             produtos = site.find_all('div', class_='promotion-item__container')
 
         print(f"🔎 Encontrei {len(produtos)} produtos na página.")
 
-        if len(produtos) == 0:
-            print("⚠️ Atenção: O site carregou, mas não encontrei nenhum bloco de oferta com esses nomes de classe.")
-            # Opcional: print(site.prettify()[:500]) # Isso mostra o começo do HTML no log
-            return
-
         for produto in produtos:
-            # Seletores ultra-flexíveis para evitar erros
-            nome_elem = produto.find('p') 
+            # Busca o título (geralmente em um <a> ou <p>)
+            nome_elem = produto.find('p', class_='promotion-item__title') or \
+                        produto.find('h2') or \
+                        produto.find('a', class_='poly-component__title')
+            
+            # Busca o preço
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
-            link_elem = produto.find('a')
+            
+            # Busca o link
+            link_elem = produto.find('a', href=True)
 
             if nome_elem and preco_elem and link_elem:
                 nome = nome_elem.text.strip()
                 preco = preco_elem.text.strip()
                 link = link_elem['href']
                 
+                # Se for link relativo, completa com o domínio
+                if link.startswith('/'):
+                    link = "https://www.mercadolivre.com.br" + link
+                
                 oferta_id = f"{nome}-{preco}"
                 
                 if oferta_id not in ofertas_postadas:
-                    print(f"📤 Tentando enviar: {nome[:20]}...")
-                    await bot.send_message(chat_id=CHAVE_DO_CANAL, text=f"✅ Teste: {nome}\n💰 R$ {preco}", parse_mode='Markdown')
+                    texto = (
+                        f"⚡ **OFERTA DO MOMENTO!** ⚡\n\n"
+                        f"📦 {nome}\n"
+                        f"💰 **R$ {preco},00**\n\n"
+                        f"🔗 [CLIQUE AQUI PARA VER]({link})"
+                    )
+                    
+                    print(f"📤 Postando: {nome[:30]}...")
+                    await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                     ofertas_postadas.add(oferta_id)
-                    print("✅ Mensagem enviada com sucesso!")
-                else:
-                    print(f"😴 {nome[:20]}... já postado.")
-
-    except Exception as e:
-        print(f"💥 ERRO CRÍTICO: {e}")
+                    time.sleep(2)
+                    
 # 3. --- AGENDADOR ---
 
 def tarefa():
