@@ -8,7 +8,9 @@ import os
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- TRUQUE DEFINITIVO PARA O RENDER ---
+# ==========================================
+# 1. TRUQUE DO SERVIDOR (PARA O RENDER NÃO MATAR O ROBÔ)
+# ==========================================
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -17,29 +19,29 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Robo Ativo!")
 
     def log_message(self, format, *args):
-        return # Silencia os logs de acesso para não sujar seu terminal
+        return # Silencia os logs de acesso
 
 def run_dummy_server():
-    # O Render injeta a porta na variável de ambiente PORT
+    # O Render injeta a porta na variável de ambiente PORT (geralmente 10000)
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
     print(f"✅ Porta {port} aberta. Render feliz!")
     server.serve_forever()
 
-# Inicia o servidor fantasma antes de começar o robô
+# Inicia o servidor fantasma IMEDIATAMENTE
 threading.Thread(target=run_dummy_server, daemon=True).start()
-# ---------------------------------------
 
-# 1. --- CONFIGURAÇÕES ---
+# ==========================================
+# 2. CONFIGURAÇÕES
+# ==========================================
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
 CHAVE_DO_CANAL = '@promodagota'
-# URL da página de ofertas do dia
 URL_OFERTAS = 'https://www.mercadolivre.com.br/ofertas#nav-header'
-
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
-# Memória para não repetir ofertas já postadas nas últimas horas
 ofertas_postadas = set()
+
+# --- A PARTIR DAQUI MANTENHA O SEU CÓDIGO ORIGINAL (Função garimpar_ofertas, etc.) ---
 
 # 2. --- FUNÇÃO DE GARIMPO ---
 
