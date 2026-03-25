@@ -49,34 +49,55 @@ async def garimpar_ofertas():
     global ofertas_postadas
     bot = Bot(token=TOKEN)
     
-    print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando garimpo de ofertas...")
+    print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando garimpo...")
     
     try:
-        resposta = requests.get(URL_OFERTAS, headers=HEADERS)
+        # 1. TENTA ACESSAR O SITE
+        resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=10)
+        print(f"📡 Status da Resposta: {resposta.status_code}")
+
         if resposta.status_code != 200:
-            print("❌ Erro ao acessar a página de ofertas.")
+            print("❌ O Mercado Livre bloqueou o acesso do servidor.")
             return
 
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # O ML organiza as ofertas em blocos. Vamos pegar os cartões de produtos:
-        produtos = site.find_all('div', class_='promotion-item__container', limit=5) # Limitamos aos 5 primeiros
-        
-      # Tentativa de pegar produtos de várias formas (Seletor mais moderno do ML)
-        produtos = site.find_all('li', class_='promotion-item') or \
-                   site.find_all('div', class_='promotion-item__container')
-        
-        print(f"🔎 Encontrei {len(produtos)} potenciais ofertas.")
+        # 2. TENTA ENCONTRAR OS PRODUTOS (SELETORES ATUALIZADOS)
+        # O ML muda essas classes direto. Vamos tentar as duas mais comuns:
+        produtos = site.find_all('li', class_='promotion-item')
+        if not produtos:
+            produtos = site.find_all('div', class_='promotion-item__container')
+
+        print(f"🔎 Encontrei {len(produtos)} produtos na página.")
+
+        if len(produtos) == 0:
+            print("⚠️ Atenção: O site carregou, mas não encontrei nenhum bloco de oferta com esses nomes de classe.")
+            # Opcional: print(site.prettify()[:500]) # Isso mostra o começo do HTML no log
+            return
 
         for produto in produtos:
-            # Seletores mais flexíveis
-            nome_elem = produto.find('p', class_='promotion-item__title')
+            # Seletores ultra-flexíveis para evitar erros
+            nome_elem = produto.find('p') 
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
-            link_elem = produto.find('a') # Pega o primeiro link do bloco
-                    
-    except Exception as e:
-        print(f"Erro no garimpo: {e}")
+            link_elem = produto.find('a')
 
+            if nome_elem and preco_elem and link_elem:
+                nome = nome_elem.text.strip()
+                preco = preco_elem.text.strip()
+                link = link_elem['href']
+                
+                oferta_id = f"{nome}-{preco}"
+                
+                if oferta_id not in ofertas_postadas:
+                    print(f"📤 Tentando enviar: {nome[:20]}...")
+                    await bot.send_message(chat_id=CHAVE_DO_CANAL, text=f"✅ Teste: {nome}\n💰 R$ {preco}", parse_mode='Markdown')
+                    ofertas_postadas.add(oferta_id)
+                    print("✅ Mensagem enviada com sucesso!")
+                else:
+                    print(f"😴 {nome[:20]}... já postado.")
+
+    except Exception as e:
+        print(f"💥 ERRO CRÍTICO: {e}")
 # 3. --- AGENDADOR ---
 
 def tarefa():
