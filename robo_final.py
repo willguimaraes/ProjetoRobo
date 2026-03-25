@@ -50,6 +50,7 @@ async def garimpar_ofertas():
     print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando garimpo...")
     
     try:
+        # 1. Tenta acessar o site
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=10)
         if resposta.status_code != 200:
             print(f"❌ Erro HTTP: {resposta.status_code}")
@@ -57,30 +58,17 @@ async def garimpar_ofertas():
 
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # --- NOVO SELETOR (Tenta 3 padrões diferentes do Mercado Livre) ---
-        # 1. Tenta o padrão de lista de ofertas do dia
-        produtos = site.find_all('li', class_='promotion-item')
-        
-        # 2. Se não achou, tenta o padrão de cards novos (Poly-card)
-        if not produtos:
-            produtos = site.find_all('div', class_='poly-card')
-            
-        # 3. Se ainda não achou, tenta o container genérico
-        if not produtos:
-            produtos = site.find_all('div', class_='promotion-item__container')
+        # 2. Múltiplos seletores para o Mercado Livre
+        produtos = site.find_all('li', class_='promotion-item') or \
+                   site.find_all('div', class_='poly-card') or \
+                   site.find_all('div', class_='promotion-item__container')
 
         print(f"🔎 Encontrei {len(produtos)} produtos na página.")
 
         for produto in produtos:
-            # Busca o título (geralmente em um <a> ou <p>)
-            nome_elem = produto.find('p', class_='promotion-item__title') or \
-                        produto.find('h2') or \
-                        produto.find('a', class_='poly-component__title')
-            
-            # Busca o preço
+            # Busca título, preço e link de forma flexível
+            nome_elem = produto.find('p') or produto.find('h2') or produto.find('a', class_='poly-component__title')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
-            
-            # Busca o link
             link_elem = produto.find('a', href=True)
 
             if nome_elem and preco_elem and link_elem:
@@ -88,7 +76,6 @@ async def garimpar_ofertas():
                 preco = preco_elem.text.strip()
                 link = link_elem['href']
                 
-                # Se for link relativo, completa com o domínio
                 if link.startswith('/'):
                     link = "https://www.mercadolivre.com.br" + link
                 
@@ -106,16 +93,20 @@ async def garimpar_ofertas():
                     await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                     ofertas_postadas.add(oferta_id)
                     time.sleep(2)
-                    
-# 3. --- AGENDADOR ---
+
+    except Exception as e:
+        # ESTA É A PARTE QUE ESTAVA FALTANDO E CAUSOU O ERRO:
+        print(f"💥 ERRO CRÍTICO NO GARIMPO: {e}")
+
+# --- AGORA SEGUE O RESTO DO SCRIPT ---
 
 def tarefa():
     asyncio.run(garimpar_ofertas())
 
-# Verifica novas ofertas a cada 1 hora (para não virar spam)
+# Verifica novas ofertas a cada 1 hora
 schedule.every(1).hours.do(tarefa)
 
-print("🚀 ROBÔ está Acordado e Funcionando! Buscando as 5 melhores ofertas...")
+print("🚀 ROBÔ ATIVADO!")
 tarefa()
 
 while True:
