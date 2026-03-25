@@ -17,7 +17,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot @promodagota - Exibindo Descontos!")
+        self.wfile.write(b"Bot @promodagota - Efeito Riscado Ativo!")
     def log_message(self, format, *args): return
 
 def run_server():
@@ -37,7 +37,7 @@ HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 
 ofertas_postadas = []
 
-# --- 3. FUNÇÃO DE GARIMPO (LÓGICA DE/POR) ---
+# --- 3. FUNÇÃO DE GARIMPO (LÓGICA HTML) ---
 async def garimpar_ofertas():
     global ofertas_postadas
     if not TOKEN: return
@@ -62,10 +62,7 @@ async def garimpar_ofertas():
 
             nome_e = p.find(['p', 'h2', 'h3']) or p.select_one('.poly-component__title')
             
-            # --- LÓGICA DE PREÇOS ---
-            # 1. Preço Atual (Com desconto)
             container_novo = p.select_one('.andes-money-amount--current') or p.select_one('.poly-price__current')
-            # 2. Preço Antigo (Riscado)
             container_antigo = p.select_one('.andes-money-amount--previous')
             
             p_novo = container_novo.find('span', class_='andes-money-amount__fraction').text.strip() if container_novo else None
@@ -91,27 +88,27 @@ async def garimpar_ofertas():
         link_afiliado = f"{link_final}{'&' if '?' in link_final else '?'}matt_tool={MATT_TOOL}&matt_word={MATT_WORD}"
         img_url = escolhido['img_e'].get('data-src') or escolhido['img_e'].get('src') if escolhido['img_e'] else None
         
-        # --- MONTAGEM DO TEXTO ---
+        # --- MONTAGEM DO TEXTO EM HTML ---
         if escolhido['preco_antigo']:
-            # Se tiver preço antigo, mostra o comparativo
-            preco_texto = f"❌ De: ~~R$ {escolhido['preco_antigo']},00~~\n✅ **Por: R$ {escolhido['preco_novo']},00**"
+            # <s> faz o efeito riscado no HTML do Telegram
+            preco_texto = f"❌ De: <s>R$ {escolhido['preco_antigo']},00</s>\n✅ <b>Por: R$ {escolhido['preco_novo']},00</b>"
         else:
-            # Se não tiver, mostra só o atual
-            preco_texto = f"💰 **Preço: R$ {escolhido['preco_novo']},00**"
+            preco_texto = f"💰 <b>Preço: R$ {escolhido['preco_novo']},00</b>"
 
         texto = (
-            f"🔥 **OFERTA DO MOMENTO!** 🔥\n\n"
+            f"🔥 <b>OFERTA DO MOMENTO!</b> 🔥\n\n"
             f"📦 {escolhido['nome']}\n\n"
             f"{preco_texto}\n\n"
-            f"⚡ *Aproveite antes que o preço suba!*"
+            f"⚡ <i>Aproveite antes que o preço suba!</i>"
         )
         
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("🛒 IR PARA A LOJA", url=link_afiliado)]])
         
+        # IMPORTANTE: parse_mode='HTML' agora
         if img_url:
-            await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown', reply_markup=teclado)
+            await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='HTML', reply_markup=teclado)
         else:
-            await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown', reply_markup=teclado)
+            await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='HTML', reply_markup=teclado)
         
         ofertas_postadas.append(escolhido['link'])
 
@@ -125,7 +122,7 @@ def tarefa():
         asyncio.run(garimpar_ofertas())
 
 schedule.every(20).minutes.do(tarefa)
-print("🚀 ROBÔ COM DE/POR ATIVADO!")
+print("🚀 ROBÔ COM RISCADO HTML ATIVADO!")
 tarefa()
 while True:
     schedule.run_pending()
