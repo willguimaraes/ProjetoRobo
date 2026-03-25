@@ -1,49 +1,40 @@
+import sys
+import os
+import threading
 import asyncio
 import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
 import schedule
 import time
-import os
-import threading
-import sys
-# Força o Python a imprimir no log IMEDIATAMENTE
-sys.stdout.reconfigure(line_buffering=True)
-
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# ==========================================
-# 1. TRUQUE DO SERVIDOR (PARA O RENDER NÃO MATAR O ROBÔ)
-# ==========================================
+# --- 1. CONFIGURAÇÃO DE LOG EM TEMPO REAL ---
+# Isso força o Render a mostrar os prints na hora!
+sys.stdout.reconfigure(line_buffering=True)
+
+# --- 2. SERVIDOR FANTASMA (PRO RENDER NÃO MATAR O BOT) ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
-        self.send_header('Content-type', 'text/html')
         self.end_headers()
-        self.wfile.write(b"Robo Ativo!")
-
+        self.wfile.write(b"Bot Online e Operante!")
     def log_message(self, format, *args):
-        return # Silencia os logs de acesso
+        return
 
-def run_dummy_server():
-    # O Render injeta a porta na variável de ambiente PORT (geralmente 10000)
+def run_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
-    print(f"✅ Porta {port} aberta. Render feliz!")
+    print(f"✅ [SISTEMA] Porta {port} aberta. Render feliz!", flush=True)
     server.serve_forever()
 
-# Inicia o servidor fantasma IMEDIATAMENTE
-threading.Thread(target=run_dummy_server, daemon=True).start()
+# Inicia o servidor em segundo plano
+threading.Thread(target=run_server, daemon=True).start()
 
-# ==========================================
-# 2. CONFIGURAÇÕES
-# ==========================================
+# --- 3. SEU TOKEN E CANAL ---
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
 CHAVE_DO_CANAL = '@promodagota'
 URL_OFERTAS = 'https://www.mercadolivre.com.br/ofertas#nav-header'
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
-
-ofertas_postadas = set()
 
 # --- A PARTIR DAQUI MANTENHA O SEU CÓDIGO ORIGINAL (Função garimpar_ofertas, etc.) ---
 
