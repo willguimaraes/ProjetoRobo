@@ -10,33 +10,36 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # --- 1. CONFIGURAÇÃO DE LOG EM TEMPO REAL ---
-# Isso força o Render a mostrar os prints na hora!
 sys.stdout.reconfigure(line_buffering=True)
 
-# --- 2. SERVIDOR FANTASMA (PRO RENDER NÃO MATAR O BOT) ---
+# --- 2. SERVIDOR FANTASMA ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot Online e Operante!")
+        self.wfile.write(b"Bot Online!")
     def log_message(self, format, *args):
         return
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
-    print(f"✅ [SISTEMA] Porta {port} aberta. Render feliz!", flush=True)
+    print(f"✅ [SISTEMA] Porta {port} aberta.", flush=True)
     server.serve_forever()
 
-# Inicia o servidor em segundo plano
 threading.Thread(target=run_server, daemon=True).start()
 
-# --- 3. SEU TOKEN E CANAL ---
+# --- 3. CONFIGURAÇÕES (Onde estava o erro!) ---
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
 CHAVE_DO_CANAL = '@promodagota'
 URL_OFERTAS = 'https://www.mercadolivre.com.br/ofertas#nav-header'
 
-# --- A PARTIR DAQUI MANTENHA O SEU CÓDIGO ORIGINAL (Função garimpar_ofertas, etc.) ---
+# ESTA LINHA É A QUE ESTAVA FALTANDO OU ESTAVA NO LUGAR ERRADO:
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+}
+
+ofertas_postadas = set()
 
 # 2. --- FUNÇÃO DE GARIMPO ---
 
