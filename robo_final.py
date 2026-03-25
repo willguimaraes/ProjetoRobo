@@ -53,31 +53,34 @@ async def garimpar_ofertas():
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=10)
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # Seletores
+        # Busca os produtos
         produtos = site.find_all('li', class_='promotion-item') or \
-                   site.find_all('div', class_='poly-card')
+                   site.find_all('div', class_='poly-card') or \
+                   site.find_all('div', class_='promotion-item__container')
 
         print(f"🔎 Encontrei {len(produtos)} produtos. Filtrando novidades...")
 
-        # LIMITAMOS AQUI: Pegamos apenas os 3 primeiros da lista para não virar spam
         contagem = 0
-       for produto in produtos:
-            if contagem >= 3: break 
+        for produto in produtos:
+            if contagem >= 3: 
+                break 
 
             nome_elem = produto.find('p') or produto.find('h2')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
             link_elem = produto.find('a', href=True)
             
-            # --- NOVO: BUSCA A IMAGEM DO PRODUTO ---
+            # Busca a imagem (Tentando src ou data-src)
             img_elem = produto.find('img')
-            # O ML às vezes esconde o link real em 'data-src' para carregar mais rápido
-            img_url = img_elem.get('data-src') or img_elem.get('src') if img_elem else None
+            img_url = None
+            if img_elem:
+                img_url = img_elem.get('data-src') or img_elem.get('src')
 
             if nome_elem and preco_elem and link_elem:
                 nome = nome_elem.text.strip()
                 preco = preco_elem.text.strip()
                 link = link_elem['href']
-                if link.startswith('/'): link = "https://www.mercadolivre.com.br" + link
+                if link.startswith('/'): 
+                    link = "https://www.mercadolivre.com.br" + link
                 
                 oferta_id = f"{nome}-{preco}"
                 
@@ -91,20 +94,23 @@ async def garimpar_ofertas():
                     
                     print(f"📤 Postando com foto: {nome[:30]}...")
                     
-                    # --- MUDANÇA AQUI: ENVIA FOTO COM LEGENDA ---
                     try:
                         if img_url:
                             await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown')
                         else:
-                            # Se não achar a foto, manda só o texto para não perder a oferta
                             await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                     except Exception as e:
-                        print(f"⚠️ Erro ao enviar foto, tentando apenas texto: {e}")
+                        print(f"⚠️ Erro na foto, enviando apenas texto: {e}")
                         await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                     
                     ofertas_postadas.add(oferta_id)
                     contagem += 1
                     await asyncio.sleep(10)
+                else:
+                    print(f"😴 {nome[:20]}... já postado.")
+
+    except Exception as e:
+        print(f"💥 ERRO CRÍTICO NO GARIMPO: {e}")
 
 # --- AGORA SEGUE O RESTO DO SCRIPT ---
 
