@@ -61,56 +61,45 @@ async def garimpar_ofertas():
         print(f"🔎 Encontrei {len(produtos)} produtos. Filtrando novidades...")
 
         contagem = 0
-        for produto in produtos:
-            if contagem >= 3: 
+       for produto in produtos:
+            if contagem >= 1: # Vamos testar apenas com 1 para não dar spam
                 break 
 
             nome_elem = produto.find('p') or produto.find('h2')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
             link_elem = produto.find('a', href=True)
-            
-            # Busca a imagem (Tentando src ou data-src)
             img_elem = produto.find('img')
-            img_url = None
-            if img_elem:
-                img_url = img_elem.get('data-src') or img_elem.get('src')
+            
+            img_url = img_elem.get('data-src') or img_elem.get('src') if img_elem else None
 
             if nome_elem and preco_elem and link_elem:
                 nome = nome_elem.text.strip()
                 preco = preco_elem.text.strip()
                 link = link_elem['href']
-                if link.startswith('/'): 
-                    link = "https://www.mercadolivre.com.br" + link
+                if link.startswith('/'): link = "https://www.mercadolivre.com.br" + link
                 
-                oferta_id = f"{nome}-{preco}"
-                
-                if oferta_id not in ofertas_postadas:
+                # --- MUDANÇA DE TESTE AQUI ---
+                if True: # Forçamos o envio ignorando se já foi postado
                     texto = (
-                        f"⚡ **OFERTA DO MOMENTO!** ⚡\n\n"
+                        f"🧪 **TESTE DE FOTO E CONEXÃO** 🧪\n\n"
                         f"📦 {nome}\n"
                         f"💰 **R$ {preco},00**\n\n"
-                        f"🔗 [CLIQUE AQUI PARA VER]({link})"
+                        f"🔗 [CLIQUE AQUI]({link})"
                     )
                     
-                    print(f"📤 Postando com foto: {nome[:30]}...")
+                    print(f"📤 Tentando enviar agora: {nome[:20]}...")
                     
                     try:
                         if img_url:
                             await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown')
                         else:
                             await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
+                        
+                        print("✅ MENSAGEM ENVIADA COM SUCESSO AO TELEGRAM!")
                     except Exception as e:
-                        print(f"⚠️ Erro na foto, enviando apenas texto: {e}")
-                        await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
+                        print(f"❌ ERRO AO ENVIAR PARA O TELEGRAM: {e}")
                     
-                    ofertas_postadas.add(oferta_id)
                     contagem += 1
-                    await asyncio.sleep(10)
-                else:
-                    print(f"😴 {nome[:20]}... já postado.")
-
-    except Exception as e:
-        print(f"💥 ERRO CRÍTICO NO GARIMPO: {e}")
 
 # --- AGORA SEGUE O RESTO DO SCRIPT ---
 
