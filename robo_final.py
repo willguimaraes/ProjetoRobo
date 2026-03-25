@@ -10,14 +10,14 @@ import schedule
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 1. SERVIDOR ---
+# --- 1. SERVIDOR PARA UPTIME ROBOT ---
 sys.stdout.reconfigure(line_buffering=True)
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot @promodagota - Rodando!")
+        self.wfile.write(b"Bot @promodagota - Sistema Ativo e Rastreando!")
     def log_message(self, format, *args): return
 
 def run_server():
@@ -33,40 +33,40 @@ CHAVE_DO_CANAL = '@promodagota'
 URL_OFERTAS = 'https://www.mercadolivre.com.br/ofertas#nav-header'
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
+# Seus dados de Afiliado
 MATT_TOOL = "11823943"
 MATT_WORD = "guwi2000508"
 
-# LISTA GLOBAL PARA NÃO PERDER A MEMÓRIA NESTA SESSÃO
 ofertas_postadas = []
 
+# --- 3. FUNÇÃO DE GARIMPO ---
 async def garimpar_ofertas():
     global ofertas_postadas
     bot = Bot(token=TOKEN)
     
-    print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando busca profunda...")
+    # Cálculo de Horário de Brasília para o Log
+    hora_utc = time.gmtime().tm_hour
+    hora_brasil = (hora_utc - 3) % 24
+    print(f"\n[{hora_brasil:02d}:00 BRT] 🕵️‍♂️ Verificando ofertas no Mercado Livre...")
     
     try:
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=15)
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # Pega todos os cards de produtos possíveis
+        # Seletores variados para garantir que pegamos os produtos
         produtos_brutos = site.find_all(['li', 'div'], class_=['promotion-item', 'poly-card', 'promotion-item__container'])
 
         novidades = []
         for p in produtos_brutos:
-            # Pega o link primeiro, que é o ID único
             link_e = p.find('a', href=True)
             if not link_e: continue
             
-            link_limpo = link_e['href'].split("#")[0] # Remove lixo do link
+            link_limpo = link_e['href'].split("#")[0]
             
-            # Se o link já foi postado, pula!
-            if link_limpo in ofertas_postadas:
-                continue
+            # Evita duplicatas pelo Link (ID Único)
+            if link_limpo in ofertas_postadas: continue
 
-            # Tenta achar o nome
             nome_e = p.find(['p', 'h2', 'h3']) or p.select_one('.poly-component__title')
-            # Tenta achar o preço (vários seletores para não falhar)
             preco_e = p.find('span', class_='andes-money-amount__fraction') or \
                       p.select_one('.poly-price__current .andes-money-amount__fraction')
 
@@ -79,19 +79,19 @@ async def garimpar_ofertas():
                 })
 
         if not novidades:
-            print("😴 Tudo o que vi agora já foi postado. Limpando memória para renovar...")
-            # Se ele postou tudo o que tinha na página, limpamos 5 para ele ter o que postar
-            if len(ofertas_postadas) > 20: ofertas_postadas = ofertas_postadas[-5:]
+            print("😴 Sem produtos novos nesta rodada. Aguardando...")
+            # Limpa memória se ficar muito cheia para permitir novas postagens no futuro
+            if len(ofertas_postadas) > 50: ofertas_postadas = ofertas_postadas[-15:]
             return
 
-        # Escolhe um aleatório das novidades
+        # Sorteia um entre os 15 primeiros para variar o conteúdo
         escolhido = random.choice(novidades[:15])
-
-        # Prepara o post
-        link_final = escolhido['link']
-        if link_final.startswith('/'): link_final = "https://www.mercadolivre.com.br" + link_final
         
-        # Injeta seu Afiliado
+        link_final = escolhido['link']
+        if link_final.startswith('/'): 
+            link_final = "https://www.mercadolivre.com.br" + link_final
+        
+        # Monta o link com seus parâmetros de afiliado
         divisor = "&" if "?" in link_final else "?"
         link_afiliado = f"{link_final}{divisor}matt_tool={MATT_TOOL}&matt_word={MATT_WORD}"
         
@@ -101,32 +101,47 @@ async def garimpar_ofertas():
             f"🔥 **OFERTA DO MOMENTO!** 🔥\n\n"
             f"📦 {escolhido['nome']}\n"
             f"💰 **R$ {escolhido['preco']},00**\n\n"
-            f"⚡ *Corre porque acaba rápido!*"
+            f"⚡ *Aproveite o preço promocional!*"
         )
         
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("🛒 IR PARA A LOJA", url=link_afiliado)]])
         
-        print(f"📤 Postando NOVIDADE: {escolhido['nome'][:30]}...")
+        print(f"📤 Postando agora: {escolhido['nome'][:30]}...")
         
-        if img_url:
-            await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown', reply_markup=teclado)
-        else:
-            await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown', reply_markup=teclado)
-        
-        # Adiciona o LINK na memória (o link nunca mente!)
-        ofertas_postadas.append(escolhido['link'])
-
+        try:
+            if img_url:
+                await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img_url, caption=texto, parse_mode='Markdown', reply_markup=teclado)
+            else:
+                await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown', reply_markup=teclado)
+            
+            # Adiciona à memória de postados
+            ofertas_postadas.append(escolhido['link'])
+            print("✅ Postado com sucesso!")
+        except Exception as e:
+            print(f"❌ Erro ao enviar para o Telegram: {e}")
+                
     except Exception as e:
-        print(f"💥 Erro: {e}")
+        print(f"💥 Erro no processo de garimpo: {e}")
 
+# --- 4. CONTROLE DE AGENDAMENTO ---
 def tarefa():
-    hora = time.localtime().tm_hour
-    if 8 <= hora <= 22:
+    # Pega a hora UTC e ajusta para Brasília (-3h)
+    hora_utc = time.gmtime().tm_hour
+    hora_brasil = (hora_utc - 3) % 24
+    
+    # CONFIGURAÇÃO DE HORÁRIO: Das 08h às 22h do Brasil
+    if 8 <= hora_brasil <= 22:
         asyncio.run(garimpar_ofertas())
+    else:
+        print(f"😴 Madrugada no Brasil ({hora_brasil:02d}h). Robô em pausa para descanso.")
 
+# Executa a cada 20 minutos
 schedule.every(20).minutes.do(tarefa)
 
-print("🚀 ROBÔ ANTI-REPETIÇÃO ATIVADO!")
+print("🚀 ROBÔ @PROMODAGOTA ATIVADO!")
+print("Sincronizado com Horário de Brasília (08h-22h).")
+
+# Execução inicial para teste
 tarefa()
 
 while True:
