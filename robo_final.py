@@ -4,6 +4,21 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 import schedule
 import time
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
+
+# --- TRUQUE PARA O RENDER NÃO DESLIGAR O ROBÔ ---
+def run_dummy_server():
+    port = int(os.environ.get("PORT", 8080))
+    # Cria um servidor simples que apenas diz "OK"
+    server = HTTPServer(('0.0.0.0', port), BaseHTTPRequestHandler)
+    print(f"✅ Servidor fantasma rodando na porta {port}")
+    server.serve_forever()
+
+# Inicia o servidor em uma "linha" separada (thread) para não parar o robô
+threading.Thread(target=run_dummy_server, daemon=True).start()
+# -----------------------------------------------
 
 # 1. --- CONFIGURAÇÕES ---
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
