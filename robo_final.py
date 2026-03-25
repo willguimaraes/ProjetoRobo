@@ -9,14 +9,14 @@ import schedule
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 1. CONFIGURAÇÃO DE LOG E SERVIDOR ---
+# --- 1. CONFIGURAÇÃO DE LOG E SERVIDOR (PARA O RENDER NÃO DORMIR) ---
 sys.stdout.reconfigure(line_buffering=True)
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot Online e Operante!")
+        self.wfile.write(b"Bot @promodagota Online!")
     def log_message(self, format, *args): return
 
 def run_server():
@@ -27,7 +27,7 @@ def run_server():
 
 threading.Thread(target=run_server, daemon=True).start()
 
-# --- 2. CONFIGURAÇÕES DO BOT ---
+# --- 2. CONFIGURAÇÕES DO BOT E ACESSO ---
 TOKEN = '8512528196:AAHCRuMbwSSgILe_WEv98D0c8TWgdatp8o8'
 CHAVE_DO_CANAL = '@promodagota'
 URL_OFERTAS = 'https://www.mercadolivre.com.br/ofertas#nav-header'
@@ -42,21 +42,22 @@ async def garimpar_ofertas():
     global ofertas_postadas
     bot = Bot(token=TOKEN)
     
-    print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando busca...")
+    print(f"\n[{time.strftime('%H:%M:%S')}] 🕵️‍♂️ Iniciando busca por ofertas...")
     
     try:
         resposta = requests.get(URL_OFERTAS, headers=HEADERS, timeout=15)
         site = BeautifulSoup(resposta.text, 'html.parser')
         
-        # Seletores de produtos
+        # Seletores de produtos do Mercado Livre (Padrão atual)
         produtos = site.find_all('li', class_='promotion-item') or \
                    site.find_all('div', class_='poly-card')
 
-        print(f"🔎 Encontrei {len(produtos)} produtos. Filtrando...")
+        print(f"🔎 Encontrei {len(produtos)} produtos. Verificando novidades...")
 
-        contagem = 0
+        postados_nesta_rodada = 0
         for produto in produtos:
-            if contagem >= 3: 
+            # ESTRATÉGIA: Posta apenas 1 por vez para manter o engajamento
+            if postados_nesta_rodada >= 1: 
                 break 
 
             nome_elem = produto.find('p') or produto.find('h2') or produto.find('a', class_='poly-component__title')
@@ -71,13 +72,14 @@ async def garimpar_ofertas():
                 if link.startswith('/'): 
                     link = "https://www.mercadolivre.com.br" + link
                 
+                # Captura a imagem (src ou data-src devido ao lazy load)
                 img_url = None
                 if img_elem:
                     img_url = img_elem.get('data-src') or img_elem.get('src')
 
                 oferta_id = f"{nome}-{preco}"
                 
-                # Para o primeiro teste, você pode usar 'if True:' se quiser forçar
+                # Verifica se é uma oferta nova para o robô
                 if oferta_id not in ofertas_postadas:
                     texto = (
                         f"⚡ **OFERTA DO MOMENTO!** ⚡\n\n"
@@ -95,25 +97,36 @@ async def garimpar_ofertas():
                             await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
                         
                         ofertas_postadas.add(oferta_id)
-                        contagem += 1
-                        await asyncio.sleep(5)
+                        postados_nesta_rodada += 1
+                        print("✅ Postagem realizada com sucesso!")
                     except Exception as e:
-                        print(f"⚠️ Erro no envio: {e}")
+                        print(f"⚠️ Erro no envio ao Telegram: {e}")
                 else:
-                    print(f"😴 {nome[:20]}... já postado.")
+                    # Se já foi postado, ele pula para o próximo da lista
+                    continue
 
     except Exception as e:
         print(f"💥 ERRO NO GARIMPO: {e}")
 
-# --- 4. AGENDAMENTO E EXECUÇÃO ---
+# --- 4. AGENDAMENTO E TRAVA DE HORÁRIO ---
 def tarefa():
-    asyncio.run(garimpar_ofertas())
+    # Pega a hora atual (Servidores costumam usar UTC/Londres)
+    # Se notar que ele para 3h antes ou depois, ajuste os números abaixo
+    hora_atual = time.localtime().tm_hour
+    
+    # SÓ TRABALHA ENTRE 08:00 E 24:00 (Evita spam na madrugada)
+    if 8 <= hora_atual <= 24:
+        print(f"⏰ Horário comercial ({hora_atual}h). Iniciando ciclo...")
+        asyncio.run(garimpar_ofertas())
+    else:
+        print(f"😴 Madrugada ({hora_atual}h). Robô em modo de espera...")
 
-# Inicia a cada 1 hora
-schedule.every(1).hours.do(tarefa)
+# Configura para rodar a cada 20 minutos
+schedule.every(20).minutes.do(tarefa)
 
-print("🚀 >>> ROBÔ OFICIAL ATIVADO! <<<")
-# Executa a primeira vez ao ligar
+print("🚀 >>> ROBÔ ESTRATÉGICO ATIVADO (1 prod / 20 min) <<<")
+
+# Executa a primeira vez ao ligar o servidor
 tarefa()
 
 while True:
