@@ -62,35 +62,17 @@ async def garimpar_ofertas():
         # O ML organiza as ofertas em blocos. Vamos pegar os cartões de produtos:
         produtos = site.find_all('div', class_='promotion-item__container', limit=5) # Limitamos aos 5 primeiros
         
+      # Tentativa de pegar produtos de várias formas (Seletor mais moderno do ML)
+        produtos = site.find_all('li', class_='promotion-item') or \
+                   site.find_all('div', class_='promotion-item__container')
+        
+        print(f"🔎 Encontrei {len(produtos)} potenciais ofertas.")
+
         for produto in produtos:
+            # Seletores mais flexíveis
             nome_elem = produto.find('p', class_='promotion-item__title')
             preco_elem = produto.find('span', class_='andes-money-amount__fraction')
-            link_elem = produto.find('a', class_='promotion-item__link-container')
-            
-            if nome_elem and preco_elem and link_elem:
-                nome = nome_elem.text.strip()
-                preco = preco_elem.text.strip()
-                link = link_elem['href']
-                
-                # Gerar um ID único para a oferta (pra não postar o mesmo item toda hora)
-                oferta_id = f"{nome}-{preco}"
-                
-                if oferta_id not in ofertas_postadas:
-                    texto = (
-                        f"⚡ **OFERTA DO MOMENTO!** ⚡\n\n"
-                        f"📦 {nome}\n"
-                        f"💰 **R$ {preco},00**\n\n"
-                        f"🔗 [CLIQUE AQUI PARA VER]({link})"
-                    )
-                    
-                    print(f"✅ Postando: {nome[:30]}...")
-                    await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='Markdown')
-                    
-                    # Salva na memória
-                    ofertas_postadas.add(oferta_id)
-                    time.sleep(3) # Pausa para o Telegram não travar
-                else:
-                    print(f"😴 {nome[:30]}... já foi postado.")
+            link_elem = produto.find('a') # Pega o primeiro link do bloco
                     
     except Exception as e:
         print(f"Erro no garimpo: {e}")
