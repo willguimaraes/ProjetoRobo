@@ -10,14 +10,14 @@ import schedule
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 1. ESTABILIDADE ---
+# --- 1. ESTABILIDADE (RENDER) ---
 sys.stdout.reconfigure(line_buffering=True)
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot @promodagota - Rodizio de Categorias")
+        self.wfile.write(b"Bot @promodagota - Mega Diversificado Ativo")
     def log_message(self, format, *args): return
 
 def run_server():
@@ -25,7 +25,16 @@ def run_server():
     server = HTTPServer(('0.0.0.0', port), SimpleHandler)
     server.serve_forever()
 
+def self_ping():
+    app_url = os.environ.get("RENDER_EXTERNAL_URL")
+    while True:
+        if app_url:
+            try: requests.get(app_url, timeout=10)
+            except: pass
+        time.sleep(300)
+
 threading.Thread(target=run_server, daemon=True).start()
+threading.Thread(target=self_ping, daemon=True).start()
 
 # --- 2. CONFIGURAÇÕES ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -35,29 +44,32 @@ AMAZON_TAG = os.environ.get('AMAZON_TAG')
 CHAVE_DO_CANAL = '@promodagota'
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
-# LISTA DE CATEGORIAS ORGANIZADA
+# --- 3. A SUPER LISTA DE CATEGORIAS (MÁXIMA DIVERSIDADE) ---
 CATEGORIAS_ML = [
-    {"nome": "TECNOLOGIA", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1051&category=MLB1051"},
-    {"nome": "CASA E COZINHA", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1574&category=MLB1574"},
-    {"nome": "BELEZA E SAUDE", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1246&category=MLB1246"},
-    {"nome": "SUPERMERCADO", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1403&category=MLB1403"},
-    {"nome": "MODA E TENIS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1430&category=MLB1430"}
+    {"nome": "TECNOLOGIA & CELULARES", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1051&category=MLB1051"},
+    {"nome": "CASA & ELETROS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1574&category=MLB1574"},
+    {"nome": "GAMES & CONSOLES", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1144&category=MLB1144"},
+    {"nome": "MODA & TÊNIS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1430&category=MLB1430"},
+    {"nome": "BELEZA & PERFUMARIA", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1246&category=MLB1246"},
+    {"nome": "SUPERMERCADO & LIMPEZA", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1403&category=MLB1403"},
+    {"nome": "AUTOMOTIVO & PNEUS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1743&category=MLB1743"},
+    {"nome": "BRINQUEDOS & BEBÊS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1132&category=MLB1132"},
+    {"nome": "MUNDO PET", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1071&category=MLB1071"}
 ]
 
 ofertas_postadas = []
 indice_cat = 0
-modo_amazon = True # Alterna entre tentar Amazon e ir direto pro ML
+alternador_loja = "ML" # ML ou AMZ
 
-# --- 3. FUNÇÕES DE BUSCA ---
+# --- 4. MOTOR DE BUSCA ---
 
 async def buscar_ml_especifico():
     global ofertas_postadas, indice_cat
-    
-    cat_atual = CATEGORIAS_ML[indice_cat]
-    print(f"🔎 [ML] Garimpando categoria: {cat_atual['nome']}")
+    cat = CATEGORIAS_ML[indice_cat]
+    print(f"🔎 [ML] Explorando: {cat['nome']}")
     
     try:
-        res = requests.get(cat_atual['url'], headers=HEADERS, timeout=25)
+        res = requests.get(cat['url'], headers=HEADERS, timeout=25)
         site = BeautifulSoup(res.text, 'html.parser')
         produtos = site.find_all(['li', 'div'], class_=['promotion-item', 'poly-card', 'promotion-item__container'])
         
@@ -79,63 +91,60 @@ async def buscar_ml_especifico():
                 candidatos.append({'nome': nome_e.text.strip(), 'novo': p_novo, 'antigo': p_antigo, 'link': link, 'img': img, 'loja': 'Mercado Livre'})
 
         if candidatos:
-            item = random.choice(candidatos[:20])
+            item = random.choice(candidatos[:35]) # Sorteio entre os 35 melhores
             link_af = f"{item['link']}{'&' if '?' in item['link'] else '?'}matt_tool={MATT_TOOL}&matt_word={MATT_WORD}"
             await enviar_telegram(item, link_af)
             ofertas_postadas.append(item['link'])
-            # Só pula para a próxima categoria se postou com sucesso
             indice_cat = (indice_cat + 1) % len(CATEGORIAS_ML)
             return True
-    except Exception as e: print(f"❌ Erro ML ({cat_atual['nome']}): {e}")
+    except Exception as e: print(f"❌ Erro ML {cat['nome']}: {e}")
     return False
 
 async def buscar_amazon():
-    print("🔎 [AMZ] Tentando Amazon...")
+    print("🔎 [AMZ] Buscando achados...")
     try:
-        res = requests.get('https://www.amazon.com.br/gp/goldbox', headers=HEADERS, timeout=25)
+        # Plano B imediato: se a Amazon não responder em 15s, vai pro ML
+        res = requests.get('https://www.amazon.com.br/gp/goldbox', headers=HEADERS, timeout=15)
         site = BeautifulSoup(res.text, 'html.parser')
-        produtos = site.select('div[data-testid="grid-desktop-card"]') or site.select('.s-result-item')
+        produtos = site.select('div[data-testid="grid-desktop-card"]')
         
-        if not produtos:
-            print("⚠️ Amazon sem resposta visual. Pulando para proxima categoria ML...")
-            return await buscar_ml_especifico()
+        if not produtos: return await buscar_ml_especifico()
         
-        # (Lógica simplificada de extração Amazon...)
-        # Se falhar em qualquer ponto da extração, chama o ML:
+        # Se achou algo na Amazon, tenta postar... caso contrário:
         return await buscar_ml_especifico()
     except:
         return await buscar_ml_especifico()
 
 async def enviar_telegram(item, link):
     bot = Bot(token=TOKEN)
-    preco_html = f"❌ De: <s>R$ {item['antigo']},00</s>\n✅ <b>Por: R$ {item['novo']},00</b>" if item['antigo'] else f"💰 <b>Preço: R$ {item['novo']},00</b>"
-    texto = f"🔥 <b>OFERTA {item['loja'].upper()}!</b> 🔥\n\n📦 {item['nome']}\n\n{preco_html}\n\n⚡ <i>Garanta na {item['loja']}!</i>"
-    teclado = InlineKeyboardMarkup([[InlineKeyboardButton(f"🛒 VER NA {item['loja'].upper()}", url=link)]])
-    if item['img']: await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=item['img'], caption=texto, parse_mode='HTML', reply_markup=teclado)
-    else: await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='HTML', reply_markup=teclado)
-    print(f"✅ POSTADO: {item['loja']}")
+    pre = f"❌ De: <s>R$ {item['antigo']},00</s>\n✅ <b>Por: R$ {item['novo']},00</b>" if item['antigo'] else f"💰 <b>Preço: R$ {item['novo']},00</b>"
+    texto = f"🔥 <b>ACHADO NO {item['loja'].upper()}!</b> 🔥\n\n📦 {item['nome']}\n\n{pre}\n\n⚡ <i>Corre pra garantir!</i>"
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(f"🛒 COMPRAR NA {item['loja'].upper()}", url=link)]])
+    try:
+        if item['img']: await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=item['img'], caption=texto, parse_mode='HTML', reply_markup=kb)
+        else: await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='HTML', reply_markup=kb)
+        print(f"✅ POSTADO: {item['loja']} - {item['nome'][:30]}...")
+    except Exception as e: print(f"Erro Telegram: {e}")
 
-# --- 4. CICLO DE RODÍZIO ---
+# --- 5. CICLO DE RODÍZIO ---
 
-def tarefa_agendada():
-    global modo_amazon
+def ciclo_mestre():
+    global alternador_loja
     h_br = (time.gmtime().tm_hour - 3) % 24
-    
     if 8 <= h_br <= 23:
-        if modo_amazon:
+        if alternador_loja == "AMZ":
             asyncio.run(buscar_amazon())
-            modo_amazon = False # Próxima rodada foca no ML direto
+            alternador_loja = "ML"
         else:
             asyncio.run(buscar_ml_especifico())
-            modo_amazon = True # Próxima rodada tenta Amazon
-    else:
-        print("😴 Horário de repouso.")
+            alternador_loja = "AMZ"
+    else: print("😴 Zzz... Horário de descanso.")
 
-# Executa a cada 10 minutos
-schedule.every(10).minutes.do(tarefa_agendada)
+# Postagem a cada 10 minutos para não cansar o público, mas manter o canal ativo
+schedule.every(10).minutes.do(ciclo_mestre)
 
-print("🚀 BOT @PROMODAGOTA INICIADO COM RODÍZIO REAL!")
-tarefa_agendada()
+print("🚀 BOT @PROMODAGOTA MEGA-DIVERSIFICADO INICIADO!")
+ciclo_mestre()
 
 while True:
     schedule.run_pending()
