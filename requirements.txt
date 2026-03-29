@@ -1,4 +1,5 @@
+python-telegram-bot
 requests
 beautifulsoup4
-python-telegram-bot
 schedule
+tweepy
