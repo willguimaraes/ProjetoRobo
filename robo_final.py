@@ -8,15 +8,15 @@ from bs4 import BeautifulSoup
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import schedule
 import time
+from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# --- 1. CONFIGURAÇÕES (PEGANDO DO RENDER) ---
+# --- 1. CONFIGURAÇÕES ---
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 MATT_TOOL = os.environ.get('MATT_TOOL')
 MATT_WORD = os.environ.get('MATT_WORD')
 CHAVE_DO_CANAL = '@promodagota'
 
-# --- 2. CATEGORIAS (9 NICHOS) ---
 CATEGORIAS_ML = [
     {"nome": "TECNOLOGIA", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1051&category=MLB1051"},
     {"nome": "CASA & ELETROS", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1574&category=MLB1574"},
@@ -29,35 +29,49 @@ CATEGORIAS_ML = [
     {"nome": "PET SHOP", "url": "https://www.mercadolivre.com.br/ofertas#c_id=MLB1071&category=MLB1071"}
 ]
 
-ofertas_postadas = []
+# Dicionário para controlar o tempo: { "link_do_produto": datetime_da_postagem }
+historico_quarentena = {}
 indice_cat = 0
 HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'}
 
-# --- 3. MOTOR DE BUSCA E POSTAGEM ---
+# --- 2. LÓGICA DE FILTRO ---
+
+def pode_postar(link):
+    global historico_quarentena
+    agora = datetime.now()
+    
+    if link in historico_quarentena:
+        horario_postado = historico_quarentena[link]
+        # Se passou menos de 6 horas, não pode postar
+        if agora < horario_postado + timedelta(hours=6):
+            return False
+    return True
+
+# --- 3. MOTOR DE BUSCA ---
 
 async def executar_ciclo():
-    global indice_cat, ofertas_postadas
+    global indice_cat, historico_quarentena
     
-    # Horário de Brasília (Render usa UTC, então subtraímos 3 horas)
     h_br = (time.gmtime().tm_hour - 3) % 24
-    if not (8 <= h_br <= 23):
-        print(f"😴 Madrugada ({h_br}h). Bot aguardando amanhecer.")
-        return
+    if not (8 <= h_br <= 23): return
 
     cat = CATEGORIAS_ML[indice_cat]
-    print(f"🔎 Buscando em: {cat['nome']}")
+    print(f"🔎 Analisando {cat['nome']}...")
     
     try:
         res = requests.get(cat['url'], headers=HEADERS, timeout=25)
         site = BeautifulSoup(res.text, 'html.parser')
-        produtos = site.find_all(['li', 'div'], class_=['promotion-item', 'poly-card', 'promotion-item__container'])
+        # Buscamos os produtos da página (limitamos aos 30 primeiros)
+        produtos = site.find_all(['li', 'div'], class_=['promotion-item', 'poly-card', 'promotion-item__container'])[:30]
         
         for p in produtos:
             link_e = p.find('a', href=True)
             if not link_e: continue
             link_base = link_e['href'].split("#")[0]
             
-            if link_base in ofertas_postadas: continue
+            # VERIFICAÇÃO DE 6 HORAS
+            if not pode_postar(link_base):
+                continue # Pula para o próximo produto da lista de 30
             
             nome_e = p.find(['p', 'h2', 'h3']) or p.select_one('.poly-component__title')
             preco_e = p.select_one('.andes-money-amount--current') or p.select_one('.poly-price__current')
@@ -65,57 +79,43 @@ async def executar_ciclo():
             if nome_e and preco_e:
                 nome = nome_e.text.strip()
                 preco = preco_e.find('span', class_='andes-money-amount__fraction').text.strip()
-                antigo_e = p.select_one('.andes-money-amount--previous')
-                p_antigo = antigo_e.find('span', class_='andes-money-amount__fraction').text.strip() if antigo_e else None
                 img = p.find('img').get('data-src') or p.find('img').get('src') if p.find('img') else None
-                
                 link_af = f"{link_base}{'&' if '?' in link_base else '?'}matt_tool={MATT_TOOL}&matt_word={MATT_WORD}"
                 
-                # --- POSTAGEM TELEGRAM ---
+                # --- POSTAGEM ---
                 bot = Bot(token=TOKEN)
-                p_html = f"❌ De: <s>R$ {p_antigo},00</s>\n✅ <b>Por: R$ {preco},00</b>" if p_antigo else f"💰 <b>Preço: R$ {preco},00</b>"
-                texto = f"🔥 <b>ACHADO NO MERCADO LIVRE!</b> 🔥\n\n📦 {nome}\n\n{p_html}\n\n⚡ <i>Corre para garantir!</i>"
+                texto = f"🔥 <b>ACHADO NO MERCADO LIVRE!</b>\n\n📦 {nome}\n💰 <b>Por: R$ {preco},00</b>\n\n⚡ <i>Garanta o seu agora!</i>"
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛒 COMPRAR AGORA", url=link_af)]])
                 
                 if img: await bot.send_photo(chat_id=CHAVE_DO_CANAL, photo=img, caption=texto, parse_mode='HTML', reply_markup=kb)
                 else: await bot.send_message(chat_id=CHAVE_DO_CANAL, text=texto, parse_mode='HTML', reply_markup=kb)
                 
-                print(f"✅ [TG] Postado: {nome[:30]}...")
-                ofertas_postadas.append(link_base)
+                # REGISTRA NO HISTÓRICO COM O HORÁRIO ATUAL
+                historico_quarentena[link_base] = datetime.now()
+                print(f"✅ Postado e em quarentena: {nome[:20]}")
+                
                 indice_cat = (indice_cat + 1) % len(CATEGORIAS_ML)
                 
-                # Limpa memória
-                if len(ofertas_postadas) > 200: ofertas_postadas.pop(0)
+                # Limpeza de memória (remove itens com mais de 24h do histórico)
+                agora = datetime.now()
+                historico_quarentena = {l: d for l, d in historico_quarentena.items() if agora < d + timedelta(hours=24)}
                 break
     except Exception as e:
-        print(f"❌ Erro na busca: {e}")
+        print(f"❌ Erro: {e}")
 
-# --- 4. SERVIDOR PARA MANTER VIVO NO RENDER ---
-
-class SimpleS(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot @promodagota Online")
-    def log_message(self, format, *args): return
-
+# --- 4. SERVIDOR E AGENDADOR ---
+class S(BaseHTTPRequestHandler):
+    def do_GET(self): self.send_response(200); self.end_headers(); self.wfile.write(b"Bot Ativo")
 def run_server():
     port = int(os.environ.get("PORT", 10000))
-    HTTPServer(('0.0.0.0', port), SimpleS).serve_forever()
-
+    HTTPServer(('0.0.0.0', port), S).serve_forever()
 threading.Thread(target=run_server, daemon=True).start()
 
-# --- 5. AGENDADOR ---
-
-def rodar():
-    asyncio.run(executar_ciclo())
-
-# Defina aqui o tempo: 10 ou 20 minutos
+def rodar(): asyncio.run(executar_ciclo())
 schedule.every(20).minutes.do(rodar)
 
-print("🚀 BOT TURBO TELEGRAM INICIADO!")
-rodar() # Força a primeira postagem na hora que liga
-
+print("🚀 Bot com Quarentena de 6h Iniciado!")
+rodar()
 while True:
     schedule.run_pending()
     time.sleep(1)
